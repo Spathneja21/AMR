@@ -13,6 +13,13 @@ find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 
+# GLFW/OpenGL for the optional native MuJoCo viewer window (mirrors RViz,
+# reads the same mjModel/mjData the node steps). Installed via apt
+# (libglfw3-dev, libgl1-mesa-dev) as regular system packages, so these
+# resolve normally — unlike MuJoCo itself below.
+find_package(glfw3 REQUIRED)
+find_package(OpenGL REQUIRED)
+
 # MuJoCo ships as part of the pip wheel, not an ament package, so it's
 # wired up with plain CMake rather than find_package/ament_target_dependencies.
 set(MUJOCO_DIR /usr/local/lib/python3.10/dist-packages/mujoco)
@@ -27,6 +34,8 @@ target_include_directories(mujoco_bridge PRIVATE
 
 target_link_libraries(mujoco_bridge
   ${MUJOCO_DIR}/libmujoco.so.3.11.0
+  glfw
+  OpenGL::GL
 )
 
 ament_target_dependencies(mujoco_bridge rclcpp geometry_msgs nav_msgs sensor_msgs tf2_ros)

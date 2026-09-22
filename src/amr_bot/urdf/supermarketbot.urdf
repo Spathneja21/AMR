@@ -19,7 +19,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="../meshes/chassis_l1.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://amr_bot/models/meshes/chassis_l1.stl" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="1">
         <color rgba="0.3 0.3 0.3 1.0"/>
@@ -28,7 +28,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="../meshes/chassis_l2.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://amr_bot/models/meshes/chassis_l2.stl" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="base_link_material">
         <color rgba="0.3 0.3 0.3 1.0"/>
@@ -37,7 +37,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="../meshes/chassis_l3.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://amr_bot/models/meshes/chassis_l3.stl" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="2">
         <color rgba="0.3 0.3 0.3 1.0"/>
@@ -66,7 +66,7 @@
     <visual>
       <origin rpy="0 0 3.141592653589793" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="../meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://amr_bot/models/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="3">
         <color rgba="0.02 0.02 0.02 1.0"/>
@@ -88,7 +88,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="../meshes/wheel.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://amr_bot/models/meshes/wheel.stl" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="4">
         <color rgba="0.02 0.02 0.02 1.0"/>
@@ -110,7 +110,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="-0 -9e-06 -0.000115"/>
       <geometry>
-        <mesh filename="../meshes/lidar_base_link.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://amr_bot/models/meshes/lidar_base_link.stl" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="5">
         <color rgba="0.020 0.020 0.020 1.0"/>
