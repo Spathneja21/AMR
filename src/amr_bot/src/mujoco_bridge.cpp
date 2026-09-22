@@ -1,7 +1,9 @@
 #include <mujoco/mujoco.h>
+#include <limits>
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <sensor_msgs/msg/laser_scan.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <tf2_ros/transform_broadcaster.h>
@@ -25,6 +27,9 @@ public:
         left_joint_id_ = mj_name2id(m_, mjOBJ_JOINT, "left_wheel_joint");
         right_joint_id_ = mj_name2id(m_, mjOBJ_JOINT, "right_wheel_joint");
 
+        int lidar0_id = mj_name2id(m_, mjOBJ_SENSOR, "lidar_0");
+        lidar_sensor_adr_ = m_->sensor_adr[lidar0_id];
+
         // 500 Hz sim step, matching the plan's SIM_HZ.
         timer_ = create_wall_timer(2ms, std::bind(&MujocoBridge::step_sim, this));
         state_timer_ = create_wall_timer(50ms, std::bind(&MujocoBridge::publish_state, this));
@@ -35,6 +40,7 @@ public:
 
         joint_pub_ = create_publisher<sensor_msgs::msg::JointState>("/joint_states", 10);
         odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("/odom", 10);
+        scan_pub_ = create_publisher<sensor_msgs::msg::LaserScan>("/scan", 10);
         tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
         RCLCPP_INFO(get_logger(), "mujoco_bridge up, stepping at 500 Hz");
@@ -105,6 +111,21 @@ private:
         };
 
         joint_pub_->publish(js);
+
+        sensor_msgs::msg::LaserScan scan;
+        scan.header.stamp = now;
+        scan.header.frame_id = "lidar_link";
+        scan.angle_min = -M_PI;
+        scan.angle_increment = 2.0 * M_PI / 360.0;
+        scan.angle_max = scan.angle_min + 359 * scan.angle_increment;
+        scan.range_min = 0.1;
+        scan.range_max = 10.0;
+        scan.ranges.resize(360);
+        for (int i = 0; i < 360; i++) {
+            double r = d_->sensordata[lidar_sensor_adr_ + i];
+            scan.ranges[i] = (r < 0) ? std::numeric_limits<double>::infinity() : r;
+        }       
+        scan_pub_->publish(scan);
     }
 
     mjModel* m_ = nullptr;
@@ -114,9 +135,11 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_pub_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
+    rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr scan_pub_;
 
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     int left_joint_id_, right_joint_id_;
+    int lidar_sensor_adr_ ;
 };
 
 int main(int argc, char** argv) {
