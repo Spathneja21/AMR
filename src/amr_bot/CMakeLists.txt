@@ -8,6 +8,10 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 # MuJoCo ships as part of the pip wheel, not an ament package, so it's
 # wired up with plain CMake rather than find_package/ament_target_dependencies.
@@ -25,7 +29,7 @@ target_link_libraries(mujoco_bridge
   ${MUJOCO_DIR}/libmujoco.so.3.11.0
 )
 
-ament_target_dependencies(mujoco_bridge rclcpp)
+ament_target_dependencies(mujoco_bridge rclcpp geometry_msgs nav_msgs sensor_msgs tf2_ros)
 
 set_target_properties(mujoco_bridge PROPERTIES
   BUILD_WITH_INSTALL_RPATH TRUE
