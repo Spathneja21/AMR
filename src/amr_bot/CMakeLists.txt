@@ -13,26 +13,26 @@ find_package(rclcpp REQUIRED)
 # wired up with plain CMake rather than find_package/ament_target_dependencies.
 set(MUJOCO_DIR /usr/local/lib/python3.10/dist-packages/mujoco)
 
-add_executable(mujoco_test src/mujoco_test.cpp)
+# No libmujoco.so symlink ships in the wheel, only the versioned .so, so we
+# link the exact file instead of -lmujoco.
+add_executable(mujoco_bridge src/mujoco_bridge.cpp)
 
-target_include_directories(mujoco_test PRIVATE
+target_include_directories(mujoco_bridge PRIVATE
   ${MUJOCO_DIR}/include
 )
 
-# No libmujoco.so symlink ships in the wheel, only the versioned .so, so we
-# link the exact file instead of -lmujoco.
-target_link_libraries(mujoco_test
+target_link_libraries(mujoco_bridge
   ${MUJOCO_DIR}/libmujoco.so.3.11.0
 )
 
-# Bake the lib's location into the binary (RPATH) so `ros2 run` works from
-# any shell without exporting LD_LIBRARY_PATH every session.
-set_target_properties(mujoco_test PROPERTIES
+ament_target_dependencies(mujoco_bridge rclcpp)
+
+set_target_properties(mujoco_bridge PROPERTIES
   BUILD_WITH_INSTALL_RPATH TRUE
   INSTALL_RPATH ${MUJOCO_DIR}
 )
 
-install(TARGETS mujoco_test
+install(TARGETS mujoco_bridge
   DESTINATION lib/${PROJECT_NAME}
 )
 
