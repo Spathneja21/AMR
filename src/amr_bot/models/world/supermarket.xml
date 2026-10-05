@@ -1,0 +1,86 @@
+<mujoco model="supermarket_world">
+  <!--
+    Standalone MJCF "world" for indoor supermarket-style navigation testing.
+    Contains no robot — include it into your robot model with, e.g.:
+
+        <mujoco model="my_robot_scene">
+          <include file="supermarket_world.xml"/>
+          ... your robot <worldbody> content, actuators, etc ...
+        </mujoco>
+
+    Or copy the <asset>/<worldbody> contents directly into your own scene.
+
+    Layout: a 12m x 8m rectangular store, walls on all 4 sides, 4 shelf
+    aisles running along the Y axis, plus a checkout counter block near
+    the entrance. Origin (0,0,0) is the store's floor center. Units: meters.
+  -->
+
+  <compiler angle="degree" autolimits="true"/>
+
+  <option timestep="0.005" gravity="0 0 -9.81"/>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.6 0.7 0.9" rgb2="1 1 1" width="256" height="256"/>
+    <texture name="floor_tex" type="2d" builtin="checker" rgb1="0.85 0.85 0.85" rgb2="0.7 0.7 0.7"
+             width="512" height="512" mark="edge" markrgb="0.3 0.3 0.3"/>
+    <material name="floor_mat" texture="floor_tex" texrepeat="12 8" texuniform="true" reflectance="0.05"/>
+
+    <material name="wall_mat" rgba="0.92 0.92 0.88 1"/>
+    <material name="shelf_frame_mat" rgba="0.35 0.3 0.25 1"/>
+    <material name="shelf_board_mat" rgba="0.65 0.5 0.3 1"/>
+    <material name="counter_mat" rgba="0.5 0.55 0.6 1"/>
+  </asset>
+
+  <worldbody>
+    <light name="top_light" pos="0 0 5" dir="0 0 -1" directional="true" diffuse="0.9 0.9 0.9" specular="0.1 0.1 0.1"/>
+    <light name="fill_light" pos="-5 -3 4" dir="0.5 0.3 -1" diffuse="0.4 0.4 0.4"/>
+
+    <!-- Floor -->
+    <geom name="floor" type="plane" size="6 4 0.1" pos="0 0 0" material="floor_mat" condim="3"/>
+
+    <!-- ============ Perimeter walls (12m x 8m footprint, 2.5m tall, 0.15m thick) ============ -->
+    <geom name="wall_north" type="box" pos="0 4.075 1.25" size="6.075 0.075 1.25" material="wall_mat"/>
+    <geom name="wall_south" type="box" pos="0 -4.075 1.25" size="6.075 0.075 1.25" material="wall_mat"/>
+    <geom name="wall_east"  type="box" pos="6.075 0 1.25"  size="0.075 4.075 1.25" material="wall_mat"/>
+    <!-- West wall has a 2m gap centered on Y=0 for the store entrance -->
+    <geom name="wall_west_a" type="box" pos="-6.075 2.5 1.25" size="0.075 1.575 1.25" material="wall_mat"/>
+    <geom name="wall_west_b" type="box" pos="-6.075 -2.5 1.25" size="0.075 1.575 1.25" material="wall_mat"/>
+
+    <!-- ============ Shelf aisles ============ -->
+    <!-- Each aisle: two parallel shelving units (1.5m long, 0.5m deep, 1.6m tall)
+         with a ~1.2m walkway between adjacent aisles. Four aisles spanning X = -3 .. 3. -->
+    <body name="aisle_1" pos="-3 0 0">
+      <geom name="aisle1_shelf_a" type="box" pos="0 -1.2 0.8" size="0.25 1.5 0.8" material="shelf_frame_mat"/>
+      <geom name="aisle1_shelf_a_top" type="box" pos="0 -1.2 1.55" size="0.27 1.55 0.03" material="shelf_board_mat"/>
+      <geom name="aisle1_shelf_b" type="box" pos="0 1.2 0.8" size="0.25 1.5 0.8" material="shelf_frame_mat"/>
+      <geom name="aisle1_shelf_b_top" type="box" pos="0 1.2 1.55" size="0.27 1.55 0.03" material="shelf_board_mat"/>
+    </body>
+
+    <body name="aisle_2" pos="-1 0 0">
+      <geom name="aisle2_shelf_a" type="box" pos="0 -1.2 0.8" size="0.25 1.5 0.8" material="shelf_frame_mat"/>
+      <geom name="aisle2_shelf_a_top" type="box" pos="0 -1.2 1.55" size="0.27 1.55 0.03" material="shelf_board_mat"/>
+      <geom name="aisle2_shelf_b" type="box" pos="0 1.2 0.8" size="0.25 1.5 0.8" material="shelf_frame_mat"/>
+      <geom name="aisle2_shelf_b_top" type="box" pos="0 1.2 1.55" size="0.27 1.55 0.03" material="shelf_board_mat"/>
+    </body>
+
+    <body name="aisle_3" pos="1 0 0">
+      <geom name="aisle3_shelf_a" type="box" pos="0 -1.2 0.8" size="0.25 1.5 0.8" material="shelf_frame_mat"/>
+      <geom name="aisle3_shelf_a_top" type="box" pos="0 -1.2 1.55" size="0.27 1.55 0.03" material="shelf_board_mat"/>
+      <geom name="aisle3_shelf_b" type="box" pos="0 1.2 0.8" size="0.25 1.5 0.8" material="shelf_frame_mat"/>
+      <geom name="aisle3_shelf_b_top" type="box" pos="0 1.2 1.55" size="0.27 1.55 0.03" material="shelf_board_mat"/>
+    </body>
+
+    <body name="aisle_4" pos="3 0 0">
+      <geom name="aisle4_shelf_a" type="box" pos="0 -1.2 0.8" size="0.25 1.5 0.8" material="shelf_frame_mat"/>
+      <geom name="aisle4_shelf_a_top" type="box" pos="0 -1.2 1.55" size="0.27 1.55 0.03" material="shelf_board_mat"/>
+      <geom name="aisle4_shelf_b" type="box" pos="0 1.2 0.8" size="0.25 1.5 0.8" material="shelf_frame_mat"/>
+      <geom name="aisle4_shelf_b_top" type="box" pos="0 1.2 1.55" size="0.27 1.55 0.03" material="shelf_board_mat"/>
+    </body>
+
+    <!-- Checkout counter near the entrance (west side) -->
+    <geom name="checkout_counter" type="box" pos="-5 0 0.5" size="0.6 1.0 0.5" material="counter_mat"/>
+
+    <!-- Free-standing end-cap display near entrance, useful as a localized obstacle -->
+    <geom name="endcap_display" type="cylinder" pos="-4.3 -2.5 0.5" size="0.35 0.5" material="shelf_board_mat"/>
+  </worldbody>
+</mujoco>

@@ -12,6 +12,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(action_msgs REQUIRED)
 
 # GLFW/OpenGL for the optional native MuJoCo viewer window (mirrors RViz,
 # reads the same mjModel/mjData the node steps). Installed via apt
@@ -48,6 +49,20 @@ set_target_properties(mujoco_bridge PROPERTIES
 install(TARGETS mujoco_bridge
   DESTINATION lib/${PROJECT_NAME}
 )
+
+# obstacle_avoider: pure ROS, no MuJoCo/GLFW — plain rclcpp node reading
+# /scan and publishing /cmd_vel_safe.
+add_executable(obstacle_avoider src/obstacle_avoider.cpp)
+ament_target_dependencies(obstacle_avoider rclcpp sensor_msgs geometry_msgs)
+install(TARGETS obstacle_avoider
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# path_logger: pure ROS, logs plans + actual motion to CSV for tracking analysis.
+add_executable(path_logger src/path_logger.cpp)
+ament_target_dependencies(path_logger rclcpp geometry_msgs nav_msgs tf2_ros action_msgs)
+install(TARGETS path_logger DESTINATION lib/${PROJECT_NAME})
+
 install(DIRECTORY launch urdf models config DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)

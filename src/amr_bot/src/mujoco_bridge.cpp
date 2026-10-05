@@ -16,7 +16,7 @@ using namespace std::chrono_literals;
 class MujocoBridge : public rclcpp::Node {
 public:
     MujocoBridge() : Node("mujoco_bridge") {
-        const char* path = "/ros2_ws/src/amr_bot/models/world/world.xml";
+        const char* path = "/ros2_ws/src/amr_bot/models/world/supermarket_scene.xml";
 
         char error[1000] = "";
         m_ = mj_loadXML(path, nullptr, error, 1000);
@@ -31,6 +31,15 @@ public:
         right_joint_id_ = mj_name2id(m_, mjOBJ_JOINT, "right_wheel_joint");
 
         int lidar0_id = mj_name2id(m_, mjOBJ_SENSOR, "lidar_0");
+
+        // mj_name2id returns -1 for a name that isn't in the model, and indexing
+        // with -1 is a silent out-of-bounds read — fail loudly here instead.
+        if (left_joint_id_ < 0 || right_joint_id_ < 0 || lidar0_id < 0) {
+            RCLCPP_ERROR(get_logger(),
+                "robot not found in model (left/right wheel joint or lidar_0 missing) - check the world file");
+            rclcpp::shutdown();
+            return;
+        }
         lidar_sensor_adr_ = m_->sensor_adr[lidar0_id];
 
         // 500 Hz sim step, matching the plan's SIM_HZ.
@@ -66,7 +75,13 @@ public:
     // window is closed or ROS shuts down — call this from main(), never
     // from inside an executor callback.
     void run_viewer() {
-        if (!window_) return;
+        // No window (no display / glfwInit failed): still block until Ctrl+C,
+        // otherwise main() returns straight into rclcpp::shutdown() while the
+        // spin thread is still starting up.
+        if (!window_) {
+            while (rclcpp::ok()) std::this_thread::sleep_for(100ms);
+            return;
+        }
 
         while (!glfwWindowShouldClose(window_) && rclcpp::ok()) {
             mjrRect viewport = {0, 0, 0, 0};
@@ -289,6 +304,7 @@ private:
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<MujocoBridge>();
+    if (!rclcpp::ok()) return 1;   // constructor bailed out (bad model) and already shut ROS down
 
     // ROS spins on a background thread; the GLFW/OpenGL render loop stays
     // on main() — GLFW window/context calls should stay on the thread that
