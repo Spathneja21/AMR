@@ -236,8 +236,19 @@ private:
         odom.pose.pose.position.y = d_->qpos[1];
         odom.pose.pose.position.z = d_->qpos[2];
         odom.pose.pose.orientation = t.transform.rotation;   // reuse, don't recompute
-        odom.twist.twist.linear.x = d_ ->qvel[0];
-        odom.twist.twist.angular.z = d_ ->qvel[5];
+        // MuJoCo free joint: qvel[0:3] is the linear velocity in the WORLD frame and
+        // qvel[3:6] the angular velocity in the BODY frame. ROS wants the whole twist in
+        // child_frame (base_link), so rotate only the linear part into the body frame.
+        mjtNum q_inv[4], v_body[3];
+        mju_negQuat(q_inv, &d_->qpos[3]);                 // conjugate = world -> body rotation
+        mju_rotVecQuat(v_body, &d_->qvel[0], q_inv);
+        odom.twist.twist.linear.x = v_body[0];
+        odom.twist.twist.linear.y = v_body[1];
+        odom.twist.twist.linear.z = v_body[2];
+        odom.twist.twist.angular.x = d_->qvel[3];
+        odom.twist.twist.angular.y = d_->qvel[4];
+        odom.twist.twist.angular.z = d_->qvel[5];
+
         odom_pub_->publish(odom);
 
 
