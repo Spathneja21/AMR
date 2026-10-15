@@ -409,13 +409,13 @@
       <body name="left_wheel_link" pos="0.051 0.1125 0.034">
         <inertial pos="0 0 0" mass="0.2" diaginertia="0.0002 0.0001 0.0001"/>
         <joint name="left_wheel_joint" type="hinge" axis="0 1 0"/>
-        <geom type="cylinder" size="0.035 0.01" euler="1.57 0 0" material="black"/>
+        <geom type="cylinder" size="0.035 0.01" euler="1.57 0 0" friction="1.8 0.01 0.001" material="black"/>
       </body>
 
       <body name="right_wheel_link" pos="0.051 -0.0925 0.034">
         <inertial pos="0 0 0" mass="0.2" diaginertia="0.0002 0.0001 0.0001"/>
         <joint name="right_wheel_joint" type="hinge" axis="0 1 0"/>
-        <geom type="cylinder" size="0.035 0.01" euler="1.57 0 0" material="black"/>
+        <geom type="cylinder" size="0.035 0.01" euler="1.57 0 0" friction="1.8 0.01 0.001" material="black"/>
       </body>
     </body>
   </worldbody>

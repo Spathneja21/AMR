@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 TOL_XY, TOL_YAW = 0.25, 0.25     # nav2 general_goal_checker (config/nav2_params.yaml)
+W_LIMIT = 1.0                    # DWB max_vel_theta in nav2_params.yaml
 
 
 def wrap(a):
@@ -146,6 +147,16 @@ def metrics(r):
     add("heading error vs path (moving)", f"mean |e| {np.degrees(np.abs(r['head_err'][:-1][mv]).mean()) if mv.any() else float('nan'):.1f} deg")
     ag = r["amcl_gt"]
     add("AMCL - true position error", f"start {ag[0]:.2f}, end {ag[-1]:.2f}, max {ag.max():.2f} m")
+    # controller health: does the robot actually do the turns it is asked for?
+    wc_nav, wc, wt = T["w_cmd_nav"][:-1], T["w_cmd"][:-1], r["w_true"]
+    dt0 = float(np.median(np.diff(T["t"])))
+    at_lim = np.abs(wc_nav) > 0.98 * W_LIMIT
+    add("time at turn limit (ctrl asks max w)", f"{at_lim.sum() * dt0:.1f} s ({100 * at_lim.mean():.0f} %)")
+    turn = np.abs(wc) > 0.3
+    if turn.any():
+        deliv = np.sum(wt[turn] * np.sign(wc[turn])) / np.sum(np.abs(wc[turn]))
+        add("yaw rate delivered / commanded", f"{deliv:.2f}  (1.0 = perfect; samples with |w cmd|>0.3: {turn.sum()})")
+
     if len(r["plans"]) > 1:
         dev = [np.mean(to_polyline(b[min(5, len(b) - 1):], a)[0]) for (_, a), (_, b) in zip(r["plans"][:-1], r["plans"][1:])
                if len(a) > 1 and len(b) > 5]
