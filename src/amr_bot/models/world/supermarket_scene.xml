@@ -38,7 +38,7 @@
       <geom type="box" size="0.080325 0.09 0.05" pos="0 0.009 0.066" material="gray"/>
       <!-- bottom at z=-0.001, level with the wheel contact plane (0.034-0.035);
            any lower and the robot tips onto it, unloads the wheels and hops -->
-      <geom name="caster" type="sphere" size="0.012" pos="-0.064 0.0105 0.011" friction="0.05 0.005 0.0001"/>
+      <geom name="caster" type="sphere" size="0.012" pos="-0.064 0.0105 0.011" friction="0.05 0.005 0.0001" priority="1"/>
 
       <geom type="mesh" mesh="lidar_base_link" material="black" pos="0 -9e-06 -0.000115" contype="0" conaffinity="0" group="1"/>
       <geom type="cylinder" size="0.02 0.0075" pos="0.015 0.01 0.15" material="gray" contype="0" conaffinity="0" group="1"/>
@@ -409,23 +409,22 @@
       <body name="left_wheel_link" pos="0.051 0.1125 0.034">
         <inertial pos="0 0 0" mass="0.2" diaginertia="0.0002 0.0001 0.0001"/>
         <joint name="left_wheel_joint" type="hinge" axis="0 1 0"/>
-        <geom type="cylinder" size="0.035 0.01" euler="1.57 0 0" friction="1.8 0.01 0.001" material="black"/>
+        <geom type="cylinder" size="0.035 0.01" euler="1.57 0 0" material="black"/>
       </body>
 
       <body name="right_wheel_link" pos="0.051 -0.0925 0.034">
         <inertial pos="0 0 0" mass="0.2" diaginertia="0.0002 0.0001 0.0001"/>
         <joint name="right_wheel_joint" type="hinge" axis="0 1 0"/>
-        <geom type="cylinder" size="0.035 0.01" euler="1.57 0 0" friction="1.8 0.01 0.001" material="black"/>
+        <geom type="cylinder" size="0.035 0.01" euler="1.57 0 0" material="black"/>
       </body>
     </body>
   </worldbody>
 
   <actuator>
-    <!-- forcerange caps motor torque at a physically sane ~0.3 N*m; without it
-         kv on a 1e-4 kg*m^2 wheel produces a startup torque spike whose
-         reaction pitches the chassis and launches the robot off the floor -->
-    <velocity name="left_wheel_vel" joint="left_wheel_joint" kv="5" ctrlrange="-10 10" forcerange="-0.3 0.3"/>
-    <velocity name="right_wheel_vel" joint="right_wheel_joint" kv="5" ctrlrange="-10 10" forcerange="-0.3 0.3"/>
+    <!-- Wheel torque motors. The wheel-speed PI loop in mujoco_bridge.cpp (step_sim)
+         writes the torque [N*m] into ctrl; ctrlrange is the motors' hard torque limit. -->
+    <motor name="left_wheel_motor" joint="left_wheel_joint" ctrllimited="true" ctrlrange="-0.3 0.3"/>
+    <motor name="right_wheel_motor" joint="right_wheel_joint" ctrllimited="true" ctrlrange="-0.3 0.3"/>
   </actuator>
 
   <sensor>
