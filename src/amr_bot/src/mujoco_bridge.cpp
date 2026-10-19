@@ -1,6 +1,7 @@
 #include <mujoco/mujoco.h>
 #include <GLFW/glfw3.h>
 #include <limits>
+#include <algorithm>
 #include <mutex>
 #include <thread>
 #include <rclcpp/rclcpp.hpp>
@@ -41,6 +42,23 @@ public:
             return;
         }
         lidar_sensor_adr_ = m_->sensor_adr[lidar0_id];
+
+        // wheel speed PI gains, tunable live: ros2 param set /mujoco_bridge wheel_kp 0.1
+        kp_ = declare_parameter("wheel_kp", kp_);
+        ki_ = declare_parameter("wheel_ki", ki_);
+        tau_max_ = declare_parameter("wheel_tau_max", tau_max_);
+        param_cb_ = add_on_set_parameters_callback(
+            [this](const std::vector & params){
+                for (const auto & p : params){
+                    if (p.get_name() == "wheel_kp") kp_ = p.as_double();
+                    else if (p.get_name() == "wheel_ki") ki_ = p.as_double();
+                    else if (p.get_name() == "wheel_tau_max") tau_max_ = p.as_double();
+                }
+                rcl_interfaces::msg::SetParametersResult res;
+                res.successful = true;
+                return res;
+            }
+        );
 
         // 500 Hz sim step, matching the plan's SIM_HZ.
         timer_ = create_wall_timer(2ms, std::bind(&MujocoBridge::step_sim, this));
