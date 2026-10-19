@@ -141,11 +141,17 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.10
+      yaw_goal_tolerance: 0.10
     # DWB parameters
     FollowPath:
-      plugin: "dwb_core::DWBLocalPlanner"
+      plugin: "nav2_rotation_shim_controller::RotationShimController"
+      primary_controller: "dwb_core::DWBLocalPlanner"
+      angular_dist_threshold: 0.785        # rad (45 deg): rotate in place first if the path heading is further off
+      forward_sampling_distance: 0.5       # m: how far along the path to read the heading to turn to
+      rotate_to_heading_angular_vel: 0.8   # rad/s: in-place turn rate; the plant delivers ~99% of 1.0 in a spin
+      max_angular_accel: 3.2               # same as DWB acc_lim_theta
+      simulate_ahead_time: 1.0
       debug_trajectory_details: True
       min_vel_x: 0.0
       min_vel_y: 0.0
@@ -170,7 +176,7 @@ controller_server:
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.10
       trans_stopped_velocity: 0.25
       short_circuit_trajectory_evaluation: True
       stateful: True

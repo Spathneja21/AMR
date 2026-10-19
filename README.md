@@ -175,7 +175,7 @@ the robot's actual motion, for plotting planned vs actual path. Starts on `/goal
 on the navigation goal's terminal status. Parameters: `label`, `log_dir`, `rate_hz`,
 `tail_s`. The analysis script and a goal-sending helper are not written yet.
 ```bash
-ros2 run amr_bot path_logger --ros-args -p label:=baseline
+ros2 run amr_bot path_logger --ros-args -p label:=afterctrl
 ```
 Set a correct AMCL initial pose (step 4c) before recording anything.
 
