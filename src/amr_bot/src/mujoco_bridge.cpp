@@ -48,7 +48,7 @@ public:
         ki_ = declare_parameter("wheel_ki", ki_);
         tau_max_ = declare_parameter("wheel_tau_max", tau_max_);
         param_cb_ = add_on_set_parameters_callback(
-            [this](const std::vector & params){
+            [this](const std::vector<rclcpp::Parameter> & params){
                 for (const auto & p : params){
                     if (p.get_name() == "wheel_kp") kp_ = p.as_double();
                     else if (p.get_name() == "wheel_ki") ki_ = p.as_double();
@@ -124,6 +124,9 @@ public:
 private:
     static constexpr double WHEEL_SEPARATION = 0.205;  // m
     static constexpr double WHEEL_RADIUS = 0.035;       // m
+    // Wheel speed limit [rad/s]. nav2's worst case (0.26 m/s while turning at 1.0 rad/s) needs 10.4.
+    static constexpr double WHEEL_SPEED_MAX = 12.0;
+
 
     void init_viewer() {
         if (!glfwInit()) {
@@ -216,7 +219,17 @@ private:
     }
 
     void step_sim() {
-        std::lock_guard<std::mutex> lock(sim_mutex_);
+        std::lock_guard lock(sim_mutex_);
+        // dt is simulated time per step, not wall clock : the wall timer may jitter, the physics doesnot
+        const double dt = m_-> opt.timestep;
+        const int dof[2] = {m_->jnt_dofadr[left_joint_id_], m_->jnt_dofadr[right_joint_id_]};
+        for (int i=0; i<2; ++i){
+            const double err = wheel_ref_[i] - d_ -> qvel[dof[i]];
+            const double u_raw = kp_ * err + integ_[i];
+            const double u = std::clamp(u_raw, -tau_max_, tau_max_);
+            if (u == u_raw || u_raw*err < 0.0) integ_[i] += ki_ * err * dt;
+            d_->ctrl[i] = u;
+        }
         mj_step(m_, d_);
     }
 
@@ -224,10 +237,11 @@ private:
         double v = msg->linear.x;
         double w = msg->angular.z;
 
-        // ctrl[0] = left_wheel_vel, ctrl[1] = right_wheel_vel — this order
-        // comes from the <actuator> declaration order in world.xml, not the name.
-        d_->ctrl[0] = (v - w * WHEEL_SEPARATION / 2.0) / WHEEL_RADIUS;
-        d_->ctrl[1] = (v + w * WHEEL_SEPARATION / 2.0) / WHEEL_RADIUS;
+        // Wheel-speed setpoints [rad/s]; the PI loop in step_sim() turns them into torque.
+        // Index 0 = left, 1 = right: the <actuator> declaration order in the XML, not the name.
+        wheel_ref_[0] = std::clamp((v - w * WHEEL_SEPARATION / 2.0) / WHEEL_RADIUS, -WHEEL_SPEED_MAX, WHEEL_SPEED_MAX);
+        wheel_ref_[1] = std::clamp((v + w * WHEEL_SEPARATION / 2.0) / WHEEL_RADIUS, -WHEEL_SPEED_MAX, WHEEL_SPEED_MAX);
+
     }
 
     void publish_state() {
@@ -312,6 +326,15 @@ private:
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     int left_joint_id_, right_joint_id_;
     int lidar_sensor_adr_;
+
+    // Wheel-speed PI, one per wheel (0 = left, 1 = right: the actuator order in the XML).
+    // Output is motor torque [N*m]. Gains are ROS parameters (see the constructor).
+    double kp_ = 0.08;                  // N*m per rad/s of speed error
+    double ki_ = 0.5;                   // N*m per rad of accumulated error
+    double tau_max_ = 0.15;             // torque limit; keeps the wheels inside their traction limit
+    double wheel_ref_[2] = {0.0, 0.0};  // setpoint from /cmd_vel [rad/s]
+    double integ_[2] = {0.0, 0.0};      // integral term, already multiplied by ki_ [N*m]
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_cb_;
 
     // Guards d_ (mjData) across the ROS executor thread (step_sim writes)
     // and the render loop, which runs on a separate thread (main()) and
