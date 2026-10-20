@@ -17,7 +17,11 @@ using namespace std::chrono_literals;
 class MujocoBridge : public rclcpp::Node {
 public:
     MujocoBridge() : Node("mujoco_bridge") {
-        const char* path = "/ros2_ws/src/amr_bot/models/world/supermarket_scene.xml";
+        // const char* path = "/ros2_ws/src/amr_bot/models/world/supermarket_scene.xml"; this line was before used
+        // Which MJCF scene to load; override with: ros2 run amr_bot mujoco_bridge --ros-args -p scene:=/path/to/scene.xml
+        const std::string scene = declare_parameter<std::string>(
+            "scene", "/ros2_ws/src/amr_bot/models/world/supermarket_scene.xml");
+        const char* path = scene.c_str();
 
         char error[1000] = "";
         m_ = mj_loadXML(path, nullptr, error, 1000);
@@ -309,7 +313,11 @@ private:
         scan.ranges.resize(360);
         for (int i = 0; i < 360; i++) {
             double r = d_->sensordata[lidar_sensor_adr_ + i];
-            scan.ranges[i] = (r < 0) ? std::numeric_limits<double>::infinity() : r;
+            //scan.ranges[i] = (r < 0) ? std::numeric_limits<double>::infinity() : r; (used before)
+            // MuJoCo returns -1 for no hit, and clamps hits beyond the sensor cutoff to exactly the cutoff
+            // (10.0 here); both mean "no return" for a LaserScan.
+            const bool no_return = r < 0 || r >= scan.range_max - 1e-6;
+            scan.ranges[i] = no_return ? std::numeric_limits<double>::infinity() : r;
         }
         scan_pub_->publish(scan);
     }
