@@ -35,6 +35,9 @@ public:
         stuck_win_s_  = declare_parameter("stuck_window_s", 6.0);
         stuck_dist_   = declare_parameter("stuck_dist", 0.15);
         escape_s_     = declare_parameter("escape_s", 2.5);
+        backup_s_     = declare_parameter("backup_s", 1.0);     // reverse this long before the escape rotation
+        backup_v_     = declare_parameter("backup_v", 0.1);
+        progress_d_   = declare_parameter("progress_dist", 0.3); // getting this much closer resets the goal timeout
         inflate_      = declare_parameter("plan_inflation", 0.20); // keep BFS paths this far from walls
         lookahead_    = declare_parameter("waypoint_lookahead", 1.0);
         min_front_d_  = declare_parameter("min_frontier_dist", 0.5);
@@ -152,9 +155,10 @@ private:
                 const int nx = x + d[0], ny = y + d[1];
                 if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
                 const int nc = ny * W + nx;
-                // near the robot, allow inflated cells so it can leave a wall it is standing next to
+                // near the robot allow inflated and unknown cells: the robot may stand next to a wall or
+                // in cells the (5 s old) map has not marked free yet. Only occupied cells block there.
                 const bool near_start = std::abs(nx - rx) + std::abs(ny - ry) <= 2 * k;
-                if (parent[nc] != -2 || g[nc] != 0 || (near_wall[nc] && !near_start)) continue;
+                if (parent[nc] != -2 || (near_start ? g[nc] >= 50 : (g[nc] != 0 || near_wall[nc]))) continue;
                 parent[nc] = c;
                 q.push(nc);
             }
@@ -162,10 +166,19 @@ private:
 
         int known = 0;
         for (auto v : g) known += v != -1;
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 10000, "mapped area: %.1f m^2", known * res * res);
+        const double area = known * res * res;
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 10000, "mapped area: %.1f m^2", area);
 
         if (found < 0) {
             has_goal_ = false;
+            // everything left is blacklisted: retry them once per 1 m^2 of new map before giving up
+            if (!blacklist_.empty() && area > retry_area_ + 1.0) {
+                RCLCPP_WARN(get_logger(), "no frontiers left, retrying %zu blacklisted ones", blacklist_.size());
+                blacklist_.clear();
+                retry_area_ = area;
+                empty_plans_ = 0;
+                return;
+            }
             if (++empty_plans_ >= 5) {
                 done_ = true;
                 RCLCPP_INFO(get_logger(), "exploration complete: no reachable frontiers left (%.1f m^2 mapped)",
@@ -175,28 +188,51 @@ private:
         }
         empty_plans_ = 0;
 
-        // timeout on one frontier -> blacklist it so we do not keep trying the same unreachable spot
+        // no progress toward one frontier for goal_timeout_ -> blacklist it
         const double fx = wx(found), fy = wy(found), t = now().seconds();
+        const double fdist = std::hypot(fx - mx, fy - my);
         if (!has_frontier_ || std::hypot(fx - frontier_x_, fy - frontier_y_) > 1.0) {
             frontier_x_ = fx;
             frontier_y_ = fy;
             frontier_t0_ = t;
+            best_fdist_ = fdist;
             has_frontier_ = true;
+        } else if (fdist < best_fdist_ - progress_d_) {
+            best_fdist_ = fdist;
+            frontier_t0_ = t;
         } else if (t - frontier_t0_ > goal_timeout_) {
-            RCLCPP_WARN(get_logger(), "frontier (%.2f, %.2f) not reached in %.0f s, blacklisting", fx, fy, goal_timeout_);
+            RCLCPP_WARN(get_logger(), "no progress to frontier (%.2f, %.2f) in %.0f s, blacklisting", fx, fy, goal_timeout_);
             blacklist_.emplace_back(fx, fy);
             has_frontier_ = false;
             has_goal_ = false;
             return;
         }
 
-        // waypoint = first cell on the BFS path at least `lookahead` from the robot (or the frontier itself)
+        // straight line robot -> cell stays in free, non-inflated cells (same relaxation next to the robot as the BFS)
+        auto visible = [&](int c) {
+            const double dx = wx(c) - mx, dy = wy(c) - my, len = std::hypot(dx, dy);
+            if (len < 1e-6) return true;
+            for (double s = 0; s <= len; s += res / 2) {
+                const int x = static_cast<int>(std::floor((mx + dx * s / len - ox) / res));
+                const int y = static_cast<int>(std::floor((my + dy * s / len - oy) / res));
+                if (x < 0 || y < 0 || x >= W || y >= H) return false;
+                const int cc = y * W + x;
+                const bool near_start = std::abs(x - rx) + std::abs(y - ry) <= 2 * k;
+                if (near_start ? g[cc] >= 50 : (g[cc] != 0 || near_wall[cc])) return false;
+            }
+            return true;
+        };
+
+        // waypoint = farthest BFS-path cell within `lookahead` that the robot can see in a straight line,
+        // so the steering target never points through a door frame
         std::vector<int> path;
         for (int c = found; c >= 0; c = parent[c]) path.push_back(c);
         std::reverse(path.begin(), path.end());
-        int wp = found;
-        for (int c : path)
-            if (std::hypot(wx(c) - mx, wy(c) - my) >= lookahead_) { wp = c; break; }
+        int wp = path[std::min<size_t>(2, path.size() - 1)];
+        for (int c : path) {
+            if (std::hypot(wx(c) - mx, wy(c) - my) > lookahead_) break;
+            if (visible(c)) wp = c;
+        }
         goal_x_ = wx(wp);
         goal_y_ = wy(wp);
         has_goal_ = std::hypot(fx - mx, fy - my) > reach_dist_;
@@ -276,9 +312,16 @@ private:
             for (int j = std::max(0, i - k); j <= std::min(n - 1, i + k); ++j) blocked[j] = true;
         }
 
-        // escape manoeuvre in progress
+        // escape manoeuvre in progress: reverse (if the back is clear), then rotate toward the open side
         if (t < escape_until_) {
-            cmd.angular.z = escape_dir_ * w_max_;
+            if (t < backup_until_) {
+                double rear = msg->range_max;
+                for (int i = 0; i < n; ++i)
+                    if (std::fabs(ang[i]) > M_PI - 0.5) rear = std::min(rear, r[i]);
+                cmd.linear.x = rear > robot_r_ + margin_ ? -backup_v_ : 0.0;
+            } else {
+                cmd.angular.z = escape_dir_ * w_max_;
+            }
             cmd_pub_->publish(cmd);
             return;
         }
@@ -286,8 +329,10 @@ private:
             double left = 0, right = 0;
             for (int i = 0; i < n; ++i) (ang[i] > 0 ? left : right) += r[i];
             escape_dir_ = left >= right ? 1.0 : -1.0;
-            escape_until_ = t + escape_s_;
-            RCLCPP_WARN(get_logger(), "stuck: rotating %s for %.1f s", escape_dir_ > 0 ? "left" : "right", escape_s_);
+            backup_until_ = t + backup_s_;
+            escape_until_ = backup_until_ + escape_s_;
+            RCLCPP_WARN(get_logger(), "stuck: reversing %.1f s, then rotating %s for %.1f s", backup_s_,
+                        escape_dir_ > 0 ? "left" : "right", escape_s_);
             return;
         }
 
@@ -347,9 +392,11 @@ private:
 
     double robot_r_, margin_, obs_dist_, stop_dist_, slow_dist_, weight_pow_, head_bonus_;
     double v_max_, w_max_, kp_, turn_only_, stuck_win_s_, stuck_dist_, escape_s_;
+    double backup_s_, backup_v_, progress_d_;
     double inflate_, lookahead_, min_front_d_, goal_timeout_, reach_dist_;
     int min_cluster_;
-    double escape_until_ = 0, escape_dir_ = 1;
+    double escape_until_ = 0, backup_until_ = 0, escape_dir_ = 1;
+    double best_fdist_ = 0, retry_area_ = -1e9;
     double last_path_x_ = 0, last_path_y_ = 0;
     double goal_x_ = 0, goal_y_ = 0, frontier_x_ = 0, frontier_y_ = 0, frontier_t0_ = 0;
     bool has_goal_ = false, has_frontier_ = false, done_ = false;
