@@ -63,6 +63,10 @@ add_executable(path_logger src/path_logger.cpp)
 ament_target_dependencies(path_logger rclcpp geometry_msgs nav_msgs tf2_ros action_msgs)
 install(TARGETS path_logger DESTINATION lib/${PROJECT_NAME})
 
+add_executable(lidar_explorer src/lidar_explorer.cpp)
+ament_target_dependencies(lidar_explorer rclcpp sensor_msgs geometry_msgs nav_msgs tf2_ros)
+install(TARGETS lidar_explorer DESTINATION lib/${PROJECT_NAME})
+
 install(DIRECTORY launch urdf models config DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
