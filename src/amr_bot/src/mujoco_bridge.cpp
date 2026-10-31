@@ -2,10 +2,13 @@
 #include <GLFW/glfw3.h>
 #include <limits>
 #include <algorithm>
+#include <chrono>
 #include <mutex>
 #include <thread>
+#include <vector>
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <nav_msgs/msg/odometry.hpp>
@@ -47,6 +50,18 @@ public:
         }
         lidar_sensor_adr_ = m_->sensor_adr[lidar0_id];
 
+        // Onboard camera is optional (not every scene needs one): warn and
+        // disable the topic rather than failing startup if it's missing.
+        cam_id_ = mj_name2id(m_, mjOBJ_CAMERA, "onboard_cam");
+        if (cam_id_ < 0) {
+            RCLCPP_WARN(get_logger(), "onboard_cam not found in model - /camera/image_raw disabled");
+        } else {
+            // Must be set before mjr_makeContext() allocates the offscreen buffer in init_viewer().
+            m_->vis.global.offwidth = CAM_WIDTH;
+            m_->vis.global.offheight = CAM_HEIGHT;
+        }
+        camera_hz_ = declare_parameter("camera_hz", camera_hz_);
+
         // wheel speed PI gains, tunable live: ros2 param set /mujoco_bridge wheel_kp 0.1
         kp_ = declare_parameter("wheel_kp", kp_);
         ki_ = declare_parameter("wheel_ki", ki_);
@@ -75,6 +90,7 @@ public:
         joint_pub_ = create_publisher<sensor_msgs::msg::JointState>("/joint_states", 10);
         odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("/odom", 10);
         scan_pub_ = create_publisher<sensor_msgs::msg::LaserScan>("/scan", 10);
+        if (cam_id_ >= 0) image_pub_ = create_publisher<sensor_msgs::msg::Image>("/camera/image_raw", 5);
         tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
         init_viewer();
@@ -85,6 +101,7 @@ public:
     ~MujocoBridge() override {
         if (window_) {
             mjv_freeScene(&scn_);
+            if (cam_id_ >= 0) mjv_freeScene(&cam_scn_);
             mjr_freeContext(&con_);
             glfwDestroyWindow(window_);
             glfwTerminate();
@@ -122,6 +139,8 @@ public:
 
             glfwSwapBuffers(window_);
             glfwPollEvents();
+
+            publish_camera();
         }
     }
 
@@ -171,6 +190,48 @@ private:
         cam_.distance = 1.5 * m_->stat.extent;
         cam_.azimuth = 90;
         cam_.elevation = -30;
+
+        if (cam_id_ >= 0) {
+            mjv_makeScene(m_, &cam_scn_, 2000);
+            mjv_defaultCamera(&cam_render_);
+            cam_render_.type = mjCAMERA_FIXED;
+            cam_render_.fixedcamid = cam_id_;
+            cam_rgb_.resize(static_cast<size_t>(CAM_WIDTH) * CAM_HEIGHT * 3);
+        }
+    }
+
+    // Renders the robot's onboard camera to an offscreen buffer and publishes it, rate-limited to
+    // camera_hz_. Runs on the same thread/GL context as the onscreen render in run_viewer() - MuJoCo's
+    // render calls are not reentrant across threads, so this can't run from the ROS executor thread.
+    void publish_camera() {
+        if (cam_id_ < 0) return;
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last_cam_pub_ < std::chrono::duration<double>(1.0 / camera_hz_)) return;
+        last_cam_pub_ = now;
+
+        {
+            std::lock_guard<std::mutex> lock(sim_mutex_);
+            mjv_updateScene(m_, d_, &opt_, nullptr, &cam_render_, mjCAT_ALL, &cam_scn_);
+        }
+        const mjrRect viewport = {0, 0, CAM_WIDTH, CAM_HEIGHT};
+        mjr_setBuffer(mjFB_OFFSCREEN, &con_);
+        mjr_render(viewport, &cam_scn_, &con_);
+        mjr_readPixels(cam_rgb_.data(), nullptr, viewport, &con_);
+        mjr_setBuffer(mjFB_WINDOW, &con_);  // restore before the next onscreen frame
+
+        sensor_msgs::msg::Image img;
+        img.header.stamp = get_clock()->now();
+        img.header.frame_id = "camera_link";
+        img.height = CAM_HEIGHT;
+        img.width = CAM_WIDTH;
+        img.encoding = "rgb8";
+        img.step = CAM_WIDTH * 3;
+        img.data.resize(cam_rgb_.size());
+        // mjr_readPixels follows OpenGL convention (row 0 = bottom); flip to row 0 = top for ROS/RViz.
+        for (int row = 0; row < CAM_HEIGHT; ++row) {
+            std::copy_n(cam_rgb_.data() + (CAM_HEIGHT - 1 - row) * img.step, img.step, img.data.begin() + row * img.step);
+        }
+        image_pub_->publish(img);
     }
 
     // Mouse-orbit camera controls, same scheme as MuJoCo's own sample
@@ -359,6 +420,16 @@ private:
     bool button_left_ = false, button_middle_ = false, button_right_ = false;
     double last_x_ = 0.0, last_y_ = 0.0;
     mjrContext con_;
+
+    // Onboard camera (optional: cam_id_ stays -1 and everything below is unused if the model has none).
+    static constexpr int CAM_WIDTH = 640, CAM_HEIGHT = 480;
+    int cam_id_ = -1;
+    double camera_hz_ = 10.0;
+    mjvCamera cam_render_;
+    mjvScene cam_scn_;
+    std::vector<unsigned char> cam_rgb_;
+    std::chrono::steady_clock::time_point last_cam_pub_{};
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
 };
 
 int main(int argc, char** argv) {

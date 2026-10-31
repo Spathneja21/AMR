@@ -212,7 +212,7 @@ in the live map are normal: 1° beams are ~17 cm apart at 10 m, wider than a 5 c
 ```bash
 ros2 launch nav2_bringup bringup_launch.py \
   use_sim_time:=false \
-  map:=/ros2_ws/src/amr_bot/maps/market.yaml \
+  map:=/ros2_ws/src/amr_bot/maps/office.yaml \
   params_file:=/ros2_ws/src/amr_bot/config/nav2_params.yaml
 ```
 
@@ -256,7 +256,7 @@ flowchart LR
     AR --> OUT[PNG plots + _summary.txt<br/>cross-track error, final error,<br/>yaw-rate tracking, AMCL vs true]
 ```
 ```bash
-ros2 run amr_bot path_logger --ros-args -p label:=afterctrl   # one CSV set per goal into runs/
+ros2 run amr_bot path_logger --ros-args -p label:=afteroffice   # one CSV set per goal into runs/
 python3 /ros2_ws/src/amr_bot/scripts/analyze_runs.py runs/afterctrl/afterctrl_001 \
   --map /ros2_ws/src/amr_bot/maps/market.yaml --compare runs/baselne/baseline_007
 ```
