@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<!-- Office world for ign gazebo (Gazebo Sim / Fortress). Generated model (../office/gazebo) is
+     from scripts/office_to_sdf.py. Resolve it via GZ_SIM_RESOURCE_PATH pointed at models/; see
+     README for the run command. -->
+<sdf version="1.9">
+  <world name="office">
+    <physics name="1ms" type="ode">
+      <max_step_size>0.002</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+
+    <light name="sun" type="directional">
+      <pose>0 0 10 0 0 0</pose>
+      <direction>0.3 0.3 -1</direction>
+      <visualize>false</visualize>
+      <diffuse>0.9 0.9 0.9 1</diffuse>
+    </light>
+
+    <include>
+      <uri>model://office</uri>
+    </include>
+  </world>
+</sdf>

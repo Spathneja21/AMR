@@ -6,6 +6,9 @@
   <include file="supermarket.xml"/>
   <compiler angle="radian" meshdir="."/>
   <option timestep="0.002" integrator="implicitfast"/>
+  <!-- Fade the lidar ray lines (the 360 rangefinder visualization) so the floor under
+       the robot stays visible; alpha only, no effect on the sensor data or physics. -->
+  <visual><rgba rangefinder="1 1 0.1 0.08"/></visual>
 
   <asset>
     <mesh name="chassis_l1" file="../meshes/chassis_l1.stl" scale="0.001 0.001 0.001"/>

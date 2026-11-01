@@ -54,10 +54,18 @@ docker run -it --name amr \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v ~/projects/AMR_Practice_project:/ros2_ws \
   -v ~/projects/Ros-AMR-Mobile-Robot:/reference:ro \
+  --device /dev/dri/card0 --device /dev/dri/renderD128 \
   --entrypoint bash \
   supermarketbot:humble
 ```
 - `--net=host` — ROS 2 DDS discovery is multicast-based; bridge networks break it.
+- `--device /dev/dri/...` — passes the host's Intel iGPU through, so MuJoCo and Gazebo render with
+  real hardware OpenGL instead of Mesa software rendering (`llvmpipe`). Without it, Gazebo Sim's
+  sensor rendering (lidar, camera) segfaults on spawn — confirmed by testing, not a guess; MuJoCo's
+  own viewer tolerates software rendering, Gazebo's Ogre backend does not. Check your device names
+  first (`ls /dev/dri` on the host — usually `card0`/`renderD128` for an Intel/AMD iGPU; a second
+  `card1`/`renderD129` pair is typically a discrete NVIDIA GPU, which needs `nvidia-container-toolkit`
+  instead of this flag). Drop `LIBGL_ALWAYS_SOFTWARE=1` everywhere once this is in place.
 - `--entrypoint bash` — the image's default entrypoint sources
   `/ros2_ws/install/setup.bash`, which doesn't exist yet on a fresh mount
   and aborts the whole chain. Override it and source manually instead.
