@@ -67,6 +67,11 @@ add_executable(lidar_explorer src/lidar_explorer.cpp)
 ament_target_dependencies(lidar_explorer rclcpp sensor_msgs geometry_msgs nav_msgs tf2_ros)
 install(TARGETS lidar_explorer DESTINATION lib/${PROJECT_NAME})
 
+# gazebo_lidar: /scan for the Gazebo backend, ray casting against the world's collision boxes.
+add_executable(gazebo_lidar src/gazebo_lidar.cpp)
+ament_target_dependencies(gazebo_lidar rclcpp sensor_msgs nav_msgs)
+install(TARGETS gazebo_lidar DESTINATION lib/${PROJECT_NAME})
+
 install(DIRECTORY launch urdf models config DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)

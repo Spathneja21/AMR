@@ -59,7 +59,7 @@ public:
         tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-        path_.header.frame_id = "odom";
+        path_.header.frame_id = "map";
         path_timer_ = create_wall_timer(std::chrono::milliseconds(500), [this] {
             path_.header.stamp = now();
             path_pub_->publish(path_);
@@ -267,13 +267,23 @@ private:
         hist_.push_back({t, p.position.x, p.position.y});
         while (!hist_.empty() && t - hist_.front().t > stuck_win_s_) hist_.pop_front();
 
-        if (path_.poses.empty() || std::hypot(p.position.x - last_path_x_, p.position.y - last_path_y_) > 0.05) {
-            geometry_msgs::msg::PoseStamped ps;
-            ps.header = path_.header;
-            ps.pose = p;
-            path_.poses.push_back(ps);
-            last_path_x_ = p.position.x;
-            last_path_y_ = p.position.y;
+        // Record the map-frame pose at this moment, so later SLAM corrections to map->odom don't
+        // move the points already drawn. Nothing is recorded until SLAM publishes map->base_link.
+        try {
+            const auto tf = tf_buffer_->lookupTransform("map", "base_link", tf2::TimePointZero);
+            const auto& tr = tf.transform.translation;
+            if (path_.poses.empty() || std::hypot(tr.x - last_path_x_, tr.y - last_path_y_) > 0.05) {
+                geometry_msgs::msg::PoseStamped ps;
+                ps.header = path_.header;
+                ps.pose.position.x = tr.x;
+                ps.pose.position.y = tr.y;
+                ps.pose.position.z = tr.z;
+                ps.pose.orientation = tf.transform.rotation;
+                path_.poses.push_back(ps);
+                last_path_x_ = tr.x;
+                last_path_y_ = tr.y;
+            }
+        } catch (const tf2::TransformException&) {
         }
     }
 
