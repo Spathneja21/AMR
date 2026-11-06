@@ -1,6 +1,7 @@
 """Robot side of the Gazebo backend: spawns the sensor-stripped robot (Gazebo's own lidar/camera
 crash the server here - see PROCESS.md), bridges /cmd_vel, /odom, /tf, /joint_states, /clock to ROS 2
-with the same names mujoco_bridge uses, and starts robot_state_publisher and gazebo_lidar (/scan).
+with the same names mujoco_bridge uses, and starts robot_state_publisher, gazebo_lidar (/scan) and
+gazebo_camera (/camera/image_raw).
 Everything downstream must run with use_sim_time:=true, because these stamps are Gazebo's clock.
 
 Start `ign gazebo -r .../office.world.sdf` yourself first (it's an interactive GUI window, same as
@@ -48,5 +49,6 @@ def generate_launch_description():
     )
 
     lidar = Node(package='amr_bot', executable='gazebo_lidar', output='screen')
+    camera = Node(package='amr_bot', executable='gazebo_camera', output='screen')
 
-    return LaunchDescription([rsp, spawn, bridge, lidar])
+    return LaunchDescription([rsp, spawn, bridge, lidar, camera])

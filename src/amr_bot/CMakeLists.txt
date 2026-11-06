@@ -72,6 +72,17 @@ add_executable(gazebo_lidar src/gazebo_lidar.cpp)
 ament_target_dependencies(gazebo_lidar rclcpp sensor_msgs nav_msgs)
 install(TARGETS gazebo_lidar DESTINATION lib/${PROJECT_NAME})
 
+# gazebo_camera: /camera/image_raw for the Gazebo backend, drawn by MuJoCo at Gazebo's true pose.
+add_executable(gazebo_camera src/gazebo_camera.cpp)
+target_include_directories(gazebo_camera PRIVATE ${MUJOCO_DIR}/include)
+target_link_libraries(gazebo_camera ${MUJOCO_DIR}/libmujoco.so.3.11.0 glfw OpenGL::GL)
+ament_target_dependencies(gazebo_camera rclcpp nav_msgs sensor_msgs)
+set_target_properties(gazebo_camera PROPERTIES
+  BUILD_WITH_INSTALL_RPATH TRUE
+  INSTALL_RPATH ${MUJOCO_DIR}
+)
+install(TARGETS gazebo_camera DESTINATION lib/${PROJECT_NAME})
+
 install(DIRECTORY launch urdf models config DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)

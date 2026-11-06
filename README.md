@@ -9,12 +9,14 @@ The robot can explore an unknown building on its own from lidar alone, while
 
 ![Office map built by autonomous exploration](docs/office_map_explored.png)
 
-The `amr_bot` package has four executables:
+The `amr_bot` package has six executables:
 
 | Executable | What it does |
 |---|---|
 | `mujoco_bridge` | Physics (500 Hz), wheel-speed PI, publishes `/odom`, `/scan`, `/joint_states`, TF `odom→base_link`; optional MuJoCo viewer |
 | `lidar_explorer` | Autonomous exploration: frontier selection on the live SLAM map + lidar gap steering → `/cmd_vel` |
+| `gazebo_lidar` | `/scan` for the Gazebo backend, by ray casting against the world's collision boxes |
+| `gazebo_camera` | `/camera/image_raw` for the Gazebo backend, rendered by MuJoCo at Gazebo's true pose |
 | `path_logger` | Logs planned vs actual path per nav2 goal to CSV (`runs/`) |
 | `obstacle_avoider` | Lidar emergency stop on `/cmd_vel_safe` (standalone, not wired in) |
 
@@ -59,13 +61,9 @@ docker run -it --name amr \
   supermarketbot:humble
 ```
 - `--net=host` — ROS 2 DDS discovery is multicast-based; bridge networks break it.
-- `--device /dev/dri/...` — passes the host's Intel iGPU through, so MuJoCo and Gazebo render with
-  real hardware OpenGL instead of Mesa software rendering (`llvmpipe`). Without it, Gazebo Sim's
-  sensor rendering (lidar, camera) segfaults on spawn — confirmed by testing, not a guess; MuJoCo's
-  own viewer tolerates software rendering, Gazebo's Ogre backend does not. Check your device names
-  first (`ls /dev/dri` on the host — usually `card0`/`renderD128` for an Intel/AMD iGPU; a second
-  `card1`/`renderD129` pair is typically a discrete NVIDIA GPU, which needs `nvidia-container-toolkit`
-  instead of this flag). Drop `LIBGL_ALWAYS_SOFTWARE=1` everywhere once this is in place.
+- `--device /dev/dri/...` passes the host's Intel iGPU through, so MuJoCo and Gazebo's GUI render on real
+  hardware. Check names with `ls /dev/dri` on the host; a second `card1`/`renderD129` pair is usually the NVIDIA
+  GPU, which needs `nvidia-container-toolkit` instead. Drop `LIBGL_ALWAYS_SOFTWARE=1` once this is in place.
 - `--entrypoint bash` — the image's default entrypoint sources
   `/ros2_ws/install/setup.bash`, which doesn't exist yet on a fresh mount
   and aborts the whole chain. Override it and source manually instead.
@@ -148,29 +146,38 @@ doorways); the textured meshes are visual only, but lidar rays still hit them, s
 scan sees the real geometry. The robot's include must stay first so its
 `<compiler>`/`<option>` (radians, 0.002 s) win.
 
-## Gazebo backend (body only — no lidar)
+## Gazebo backend
 
-A second simulator backend, Gazebo Sim (Fortress), also runs the same office and robot — but **lidar
-and camera are not usable here**: they crash the Gazebo server on this machine (confirmed on both
-Fortress and Harmonic, same root cause in the renderer; CPU-only lidar isn't implemented in this
-Gazebo version either). Nothing involving `/scan` (SLAM, `lidar_explorer`, mapping) works on this
-backend — that stays MuJoCo-only. See `PROCESS.md` sections 30–33 for the full investigation.
+The same robot and office also run in Gazebo Sim (Fortress), with the same topic names as `mujoco_bridge`.
+Gazebo's own lidar and camera sensors crash the server here (Fortress and Harmonic; root cause unknown, NVIDIA GPU
+untested), so the robot spawns without them. `/scan` comes from `gazebo_lidar`, which casts rays from the true pose
+against the office's collision boxes. It only sees those static boxes, not objects added to the world at runtime.
+`/camera/image_raw` comes from `gazebo_camera`, which draws the robot's camera view with MuJoCo at the same true pose,
+so its lighting and textures differ from the Gazebo window, and objects added at runtime don't appear.
 
-What *does* work: driving the robot body around with plain ROS 2 topics, same names as
-`mujoco_bridge` (`/cmd_vel`, `/odom`, `/tf`, `/joint_states`), via a `ros_gz_bridge`.
-
+Don't set `LIBGL_ALWAYS_SOFTWARE`, and don't run this alongside `mujoco_bridge` or teleop.
 ```bash
-# terminal 1 — the world (interactive GUI, started by hand like the MuJoCo viewer)
+# terminal 1: world (-r starts it running)
 export GZ_SIM_RESOURCE_PATH=/ros2_ws/src/amr_bot/models/gazebo:/ros2_ws/src
-ign gazebo /ros2_ws/src/amr_bot/models/gazebo/office.world.sdf
-
-# terminal 2 — spawns the robot, starts robot_state_publisher + the ROS↔Gazebo bridge
+ign gazebo -r /ros2_ws/src/amr_bot/models/gazebo/office.world.sdf
+# terminal 2: robot, ROS bridge, TF, lidar
 ros2 launch amr_bot gazebo.launch.py
-
-# terminal 3 — ordinary ROS 2 tools now work against it
-ros2 run teleop_twist_keyboard teleop_twist_keyboard
-ros2 topic echo /odom
+# terminal 3: SLAM
+ros2 run slam_toolbox async_slam_toolbox_node --ros-args --params-file /ros2_ws/src/amr_bot/config/async_slam_toolbox_cfg.yaml
+# terminal 4: autonomous exploration
+ros2 run amr_bot lidar_explorer --ros-args -p use_sim_time:=true
+# terminal 5
+rviz2 --ros-args -p use_sim_time:=true
+# when it logs "exploration complete"
+ros2 run nav2_map_server map_saver_cli -f /ros2_ws/src/amr_bot/maps/office
 ```
+Then stop SLAM and the explorer, start nav2 with AMCL, and set the pose with RViz's 2D Pose Estimate:
+```bash
+ros2 launch nav2_bringup bringup_launch.py use_sim_time:=true \
+  map:=/ros2_ws/src/amr_bot/maps/office.yaml \
+  params_file:=/ros2_ws/src/amr_bot/config/nav2_params.yaml
+```
+
 `models/gazebo/office/` and `office.world.sdf` are generated by `scripts/office_to_sdf.py` from the
 same box-sliced collision data as the MuJoCo office (open doorways, not a convex-hull mesh). The robot
 spawned in Gazebo uses `scripts/urdf_gazebo_nosensors.py` — a copy of the real URDF with the lidar/camera
