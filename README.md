@@ -124,6 +124,8 @@ sudo chown -R $USER:$USER ~/projects/AMR_Practice_project
 | Supermarket (default) | `models/world/supermarket_scene.xml` | original world |
 | Office | `models/world/office_scene.xml` | Clearpath `cpr_office_gazebo` (BSD), converted to MuJoCo — see `models/office/README.md` |
 
+![Office world preview](src/amr_bot/models/office/source/office_world_preview.png)
+
 ```bash
 LIBGL_ALWAYS_SOFTWARE=1 ros2 run amr_bot mujoco_bridge \
   --ros-args -p scene:=/ros2_ws/src/amr_bot/models/world/office_scene.xml
@@ -183,6 +185,10 @@ same box-sliced collision data as the MuJoCo office (open doorways, not a convex
 spawned in Gazebo uses `scripts/urdf_gazebo_nosensors.py` — a copy of the real URDF with the lidar/camera
 `<gazebo>` blocks stripped (regenerated each time, can't go stale); `robot_state_publisher` still gets
 the full URDF since it only produces TF and never talks to Gazebo.
+
+SLAM-built map from a lidar scan run in this backend:
+
+![Gazebo office lidar scan](src/amr_bot/models/gazebo/office/lidar_scan.png)
 
 ## Autonomous exploration (no prior map)
 
